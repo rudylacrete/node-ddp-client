@@ -30,22 +30,30 @@ describe("Connect to remote server", function() {
     assert(wsConstructor.calledOnce);
     assert(wsConstructor.calledWithNew());
     assert(wsConstructor.call);
-    assert.deepEqual(wsConstructor.args, [['ws://localhost:3000/websocket']]);
+    assert.deepEqual(wsConstructor.args, [['ws://localhost:3000/websocket', null, {}]]);
   });
 
   it('should connect to the provided host', function() {
     new DDPClient({'host': 'myserver.com'}).connect();
-    assert.deepEqual(wsConstructor.args, [['ws://myserver.com:3000/websocket']]);
+    assert.deepEqual(wsConstructor.args, [['ws://myserver.com:3000/websocket', null, {}]]);
   });
 
   it('should connect to the provided host and port', function() {
     new DDPClient({'host': 'myserver.com', 'port': 42}).connect();
-    assert.deepEqual(wsConstructor.args, [['ws://myserver.com:42/websocket']]);
+    assert.deepEqual(wsConstructor.args, [['ws://myserver.com:42/websocket', null, {}]]);
   });
 
   it('should use ssl if the port is 443', function() {
     new DDPClient({'host': 'myserver.com', 'port': 443}).connect();
-    assert.deepEqual(wsConstructor.args, [['wss://myserver.com:443/websocket']]);
+    assert.deepEqual(wsConstructor.args, [['wss://myserver.com:443/websocket', null, {}]]);
+  });
+
+  it('should propagate tls options if specified', function() {
+    var tlsOpts = {
+      'ca': ['fake_pem_content']
+    }
+    new DDPClient({'host': 'myserver.com', 'port': 443, 'tlsOpts': tlsOpts}).connect();
+    assert.deepEqual(wsConstructor.args, [['wss://myserver.com:443/websocket', null, tlsOpts]]);
   });
 
   it('should clear event listeners on close', function(done) {
@@ -288,8 +296,8 @@ describe("SockJS", function() {
   describe("after info hit", function() {
     var request = require("request");
     it("should connect to the correct url", function(done) {
-      var get = function(url, callback) {
-        assert.equal(url, "http://the-host:9000/sockjs/info");
+      var get = function(opts, callback) {
+        assert.equal(opts.url, "http://the-host:9000/sockjs/info");
         done();
       };
 
@@ -304,8 +312,8 @@ describe("SockJS", function() {
     });
 
     it("should support custom paths", function(done) {
-      var get = function(url, callback) {
-        assert.equal(url, "http://the-host:9000/search/sockjs/info");
+      var get = function(opts, callback) {
+        assert.equal(opts.url, "http://the-host:9000/search/sockjs/info");
         done();
       };
 
@@ -322,7 +330,7 @@ describe("SockJS", function() {
 
     it("should retry if there is an error", function() {
       var error = { message: "error" };
-      var get = function(url, callback) {
+      var get = function(opts, callback) {
         callback(error);
       };
 
@@ -336,7 +344,7 @@ describe("SockJS", function() {
 
     it("should use direct WS if there is no body", function() {
       var info = null;
-      var get = function(url, callback) {
+      var get = function(opts, callback) {
         callback(null, null, info);
       };
 
@@ -352,7 +360,7 @@ describe("SockJS", function() {
 
     it("should use direct WS if there is no base_url", function() {
       var info = '{}';
-      var get = function(url, callback) {
+      var get = function(opts, callback) {
         callback(null, null, info);
       };
 
@@ -368,7 +376,7 @@ describe("SockJS", function() {
 
     it("should use full base url if it's starts with http", function() {
       var info = '{"base_url": "https://somepath"}';
-      var get = function(url, callback) {
+      var get = function(opts, callback) {
         callback(null, null, info);
       };
 
@@ -384,7 +392,7 @@ describe("SockJS", function() {
 
     it("should compute url based on the base_url if it's not starts with http", function() {
       var info = '{"base_url": "/somepath"}';
-      var get = function(url, callback) {
+      var get = function(opts, callback) {
         callback(null, null, info);
       };
 
@@ -395,6 +403,25 @@ describe("SockJS", function() {
 
         var wsUrl = "ws://localhost:3000/somepath/websocket";
         assert.ok(ddpclient._makeWebSocketConnection.calledWith(wsUrl));
+      });
+    });
+
+    it("should propagate tls options", function(done) {
+      var tlsOpts = {'ca': ['fake_pem_content']};
+      var get = function(opts, callback) {
+        assert.equal(opts.agentOptions, tlsOpts);
+        done();
+      };
+
+      WithRequestGet(get, function() {
+        var opts = {
+          host: "the-host",
+          port: 9000,
+          path: "search",
+          tlsOpts: tlsOpts
+        };
+        var ddpclient = new DDPClient(opts);
+        ddpclient._makeSockJSConnection();
       });
     });
   });
